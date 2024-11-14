@@ -310,7 +310,7 @@ def settings_page():
                 with st.spinner("Verifying API key..."):
                     # Try to make a simple API call
                     headers = {
-                        "Authorization": f"Bearer {api_key}",
+                        "Authorization": api_key,
                         "Content-Type": "application/json"
                     }
                     response = requests.get(

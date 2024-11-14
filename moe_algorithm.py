@@ -23,7 +23,7 @@ def fetch_domain_keywords(domain: str) -> pd.DataFrame:
     # First, create a project for the domain
     project_url = f"{base_url}/projects"
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": api_key,
         "Content-Type": "application/json"
     }
     
