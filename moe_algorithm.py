@@ -1,12 +1,12 @@
+import os
 import pandas as pd
 import numpy as np
 from typing import List, Dict
 import requests
 from datetime import datetime
-import os
-from dotenv import load_dotenv
 import time
-from utils.rate_limiter import rate_limit
+from dotenv import load_dotenv
+from utils.rate_limiter import rate_limit, RateLimiter
 
 load_dotenv()
 

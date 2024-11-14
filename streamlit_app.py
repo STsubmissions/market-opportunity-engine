@@ -8,7 +8,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from moe_algorithm import analyze_market_opportunity
 import requests
-from utils.rate_limiter import rate_limit
+from utils.rate_limiter import rate_limit, RateLimiter
 
 # Load environment variables
 load_dotenv()
