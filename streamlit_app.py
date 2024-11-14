@@ -51,16 +51,16 @@ def init_session_state():
 def sidebar():
     """Render the sidebar"""
     with st.sidebar:
-        st.title("")
+        st.title("🔍 MOE Navigation")
         st.markdown("---")
         
-        if st.button(""):
+        if st.button("🏠 Home"):
             st.session_state.current_page = 'home'
-        if st.button(""):
+        if st.button("🎯 Analysis"):
             st.session_state.current_page = 'analysis'
-        if st.button("", disabled=st.session_state.analysis_results is None):
+        if st.button("📊 Results", disabled=st.session_state.analysis_results is None):
             st.session_state.current_page = 'results'
-        if st.button(""):
+        if st.button("⚙️ Settings"):
             st.session_state.current_page = 'settings'
         
         st.markdown("---")
