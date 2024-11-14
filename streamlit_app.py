@@ -8,6 +8,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from moe_algorithm import analyze_market_opportunity
 import requests
+from utils.rate_limiter import rate_limit
 
 # Load environment variables
 load_dotenv()
@@ -15,7 +16,7 @@ load_dotenv()
 # Page config
 st.set_page_config(
     page_title="Market Opportunity Engine",
-    page_icon="📊",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -50,16 +51,16 @@ def init_session_state():
 def sidebar():
     """Render the sidebar"""
     with st.sidebar:
-        st.title("🔍 MOE Navigation")
+        st.title("")
         st.markdown("---")
         
-        if st.button("🏠 Dashboard"):
+        if st.button(""):
             st.session_state.current_page = 'home'
-        if st.button("🎯 Market Analysis"):
+        if st.button(""):
             st.session_state.current_page = 'analysis'
-        if st.button("📊 Results", disabled=st.session_state.analysis_results is None):
+        if st.button("", disabled=st.session_state.analysis_results is None):
             st.session_state.current_page = 'results'
-        if st.button("⚙️ Settings"):
+        if st.button(""):
             st.session_state.current_page = 'settings'
         
         st.markdown("---")
@@ -261,6 +262,29 @@ def analysis_page():
                 progress_bar.empty()
                 progress_text.empty()
 
+@rate_limit(calls_per_second=1)
+def verify_api_key(api_key):
+    """Verify SE Rankings API key with rate limiting"""
+    headers = {
+        "Authorization": api_key,
+        "Content-Type": "application/json"
+    }
+    try:
+        response = requests.get(
+            "https://api4.seranking.com/research/us/overview/",
+            params={"domain": "example.com"},
+            headers=headers,
+            timeout=10
+        )
+        if response.status_code == 429:
+            retry_after = int(response.headers.get('Retry-After', 600))
+            st.warning(f"Rate limit exceeded. Please try again in {retry_after} seconds.")
+            return False
+        return response.status_code == 200
+    except requests.exceptions.RequestException as e:
+        st.error(f"API request failed: {str(e)}")
+        return False
+
 def settings_page():
     """Render the settings page"""
     st.title("Settings")
@@ -308,20 +332,10 @@ def settings_page():
             # Verify API key works
             if api_key:
                 with st.spinner("Verifying API key..."):
-                    # Try to make a simple API call
-                    headers = {
-                        "Authorization": api_key,
-                        "Content-Type": "application/json"
-                    }
-                    response = requests.get(
-                        "https://api4.seranking.com/research/us/overview/",
-                        params={"domain": "example.com"},
-                        headers=headers
-                    )
-                    if response.status_code == 200:
+                    if verify_api_key(api_key):
                         st.success("API key verified successfully!")
                     else:
-                        st.error(f"Invalid API key. Status code: {response.status_code}")
+                        st.error("Invalid API key. Please check your credentials.")
         
         except Exception as e:
             st.error(f"Error saving settings: {str(e)}")

@@ -6,8 +6,34 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 import time
+from utils.rate_limiter import rate_limit
 
 load_dotenv()
+
+# Initialize rate limiters
+research_limiter = RateLimiter(calls_per_second=1)  # 1 request per second for research API
+
+@rate_limit(calls_per_second=1)
+def make_api_request(url, headers, params=None, json=None, method="GET"):
+    """Make a rate-limited API request"""
+    try:
+        if method == "GET":
+            response = requests.get(url, headers=headers, params=params, timeout=10)
+        elif method == "POST":
+            response = requests.post(url, headers=headers, json=json, timeout=10)
+        elif method == "DELETE":
+            response = requests.delete(url, headers=headers, timeout=10)
+        
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        if response.status_code == 429:
+            # Handle rate limit exceeded
+            retry_after = int(response.headers.get('Retry-After', 600))  # Default to 10 minutes
+            print(f"Rate limit exceeded. Waiting {retry_after} seconds...")
+            time.sleep(retry_after)
+            return make_api_request(url, headers, params, json, method)  # Retry the request
+        raise e
 
 def fetch_domain_keywords(domain: str) -> pd.DataFrame:
     """
@@ -35,18 +61,16 @@ def fetch_domain_keywords(domain: str) -> pd.DataFrame:
     
     try:
         # Create project
-        project_response = requests.post(project_url, headers=headers, json=project_data)
-        project_response.raise_for_status()
-        project_id = project_response.json()['id']
+        project_response = make_api_request(project_url, headers, method="POST", json=project_data)
+        project_id = project_response['id']
         
         # Wait for initial data collection
         time.sleep(5)
         
         # Fetch keyword rankings
         rankings_url = f"{base_url}/keywords/{project_id}/rankings"
-        rankings_response = requests.get(rankings_url, headers=headers)
-        rankings_response.raise_for_status()
-        rankings_data = rankings_response.json()
+        rankings_response = make_api_request(rankings_url, headers)
+        rankings_data = rankings_response
         
         # Process the rankings data into a DataFrame
         keywords_data = []
@@ -63,7 +87,7 @@ def fetch_domain_keywords(domain: str) -> pd.DataFrame:
         
         # Clean up - delete the project
         delete_url = f"{base_url}/projects/{project_id}"
-        requests.delete(delete_url, headers=headers)
+        make_api_request(delete_url, headers, method="DELETE")
         
         return pd.DataFrame(keywords_data)
         
