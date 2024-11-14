@@ -314,13 +314,14 @@ def settings_page():
                         "Content-Type": "application/json"
                     }
                     response = requests.get(
-                        "https://api.seranking.com/v3/user",
+                        "https://api4.seranking.com/research/us/overview/",
+                        params={"domain": "example.com"},
                         headers=headers
                     )
                     if response.status_code == 200:
                         st.success("API key verified successfully!")
                     else:
-                        st.error("Invalid API key. Please check your credentials.")
+                        st.error(f"Invalid API key. Status code: {response.status_code}")
         
         except Exception as e:
             st.error(f"Error saving settings: {str(e)}")

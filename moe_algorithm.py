@@ -18,7 +18,7 @@ def fetch_domain_keywords(domain: str) -> pd.DataFrame:
         raise ValueError("SE Ranking API key not found in environment variables")
     
     # SE Ranking API endpoints
-    base_url = "https://api.seranking.com/v3"
+    base_url = "https://api.seranking.com/research"
     
     # First, create a project for the domain
     project_url = f"{base_url}/projects"
