@@ -16,15 +16,26 @@ research_limiter = RateLimiter(calls_per_second=1)  # 1 request per second for r
 @rate_limit(calls_per_second=1)
 def make_api_request(url, headers=None, params=None, retries=3, delay=1):
     """Make a rate-limited API request with retries"""
+    response = None
     for attempt in range(retries):
         try:
             response = requests.get(url, headers=headers, params=params)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
+            if response is not None and response.status_code == 429:  # Rate limit exceeded
+                retry_after = int(response.headers.get('Retry-After', 60))
+                time.sleep(retry_after)
+                continue
+            
             if attempt == retries - 1:  # Last attempt
-                raise Exception(f"API request failed after {retries} attempts: {str(e)}")
-            time.sleep(delay * (attempt + 1))  # Exponential backoff
+                error_msg = str(e)
+                if response is not None:
+                    error_msg = f"HTTP {response.status_code}: {response.text}"
+                raise Exception(f"API request failed after {retries} attempts: {error_msg}")
+            
+            # Exponential backoff for other errors
+            time.sleep(delay * (2 ** attempt))
 
 def fetch_domain_keywords(domain: str) -> pd.DataFrame:
     """
