@@ -47,25 +47,21 @@ def init_session_state():
         st.session_state.current_page = 'home'
     if 'analysis_results' not in st.session_state:
         st.session_state.analysis_results = None
+    if 'competitors' not in st.session_state:
+        st.session_state.competitors = []
+    if 'new_competitor' not in st.session_state:
+        st.session_state.new_competitor = ""
 
-def sidebar():
-    """Render the sidebar"""
-    with st.sidebar:
-        st.title("🔍 MOE Navigation")
-        st.markdown("---")
-        
-        if st.button("🏠 Home"):
-            st.session_state.current_page = 'home'
-        if st.button("🎯 Analysis"):
-            st.session_state.current_page = 'analysis'
-        if st.button("📊 Results", disabled=st.session_state.analysis_results is None):
-            st.session_state.current_page = 'results'
-        if st.button("⚙️ Settings"):
-            st.session_state.current_page = 'settings'
-        
-        st.markdown("---")
-        st.markdown("### About")
-        st.markdown("Market Opportunity Engine v1.0")
+def add_competitor():
+    """Add a new competitor to the list"""
+    if st.session_state.new_competitor:
+        if st.session_state.new_competitor not in st.session_state.competitors:
+            st.session_state.competitors.append(st.session_state.new_competitor)
+        st.session_state.new_competitor = ""
+
+def remove_competitor(competitor):
+    """Remove a competitor from the list"""
+    st.session_state.competitors.remove(competitor)
 
 def display_metric_card(title, value, description=""):
     """Display a metric in a card format"""
@@ -160,107 +156,91 @@ def results_page():
 def analysis_page():
     """Render the analysis page"""
     st.title("Market Analysis")
-    st.subheader("Domain Competition Analysis")
+    st.subheader("Configure Analysis Parameters")
     
-    # Check for API key
-    api_key = os.getenv('SE_RANKING_API_KEY')
-    if not api_key:
-        st.error("SE Ranking API key not found. Please add it in the Settings page.")
-        return
+    # Domain input
+    prospect_domain = st.text_input(
+        "Enter your domain:",
+        help="Enter the domain you want to analyze (e.g., example.com)"
+    )
     
-    # Prospect Domain Input
-    prospect_domain = st.text_input("Enter Prospect Domain:", 
-                                  placeholder="e.g., example.com",
-                                  help="The main domain you want to analyze")
+    # Competitor management
+    st.subheader("Manage Competitors")
     
-    # Competitor Domains Section
-    st.subheader("Competitor Domains")
-    
-    # Initialize competitor domains in session state if not exists
-    if 'competitor_domains' not in st.session_state:
-        st.session_state.competitor_domains = []
-    
-    # Add new competitor domain
-    new_competitor = st.text_input("Add Competitor Domain:", 
-                                 placeholder="e.g., competitor.com",
-                                 key="new_competitor")
-    
+    # Add competitor
     col1, col2 = st.columns([3, 1])
     with col1:
-        if st.button("Add Competitor") and new_competitor:
-            if new_competitor not in st.session_state.competitor_domains:
-                st.session_state.competitor_domains.append(new_competitor)
-                st.session_state.new_competitor = ""  # Clear input
-                st.rerun()
+        st.text_input(
+            "Add competitor domain:",
+            key="new_competitor",
+            help="Enter a competitor's domain (e.g., competitor.com)"
+        )
+    with col2:
+        st.button("Add", on_click=add_competitor)
     
-    # Display and manage competitor domains
-    if st.session_state.competitor_domains:
-        st.write("Current Competitors:")
-        for i, domain in enumerate(st.session_state.competitor_domains):
+    # List competitors
+    if st.session_state.competitors:
+        st.write("Current competitors:")
+        for comp in st.session_state.competitors:
             col1, col2 = st.columns([3, 1])
             with col1:
-                st.text(f"{i+1}. {domain}")
+                st.write(comp)
             with col2:
-                if st.button("Remove", key=f"remove_{i}"):
-                    st.session_state.competitor_domains.pop(i)
-                    st.rerun()
+                if st.button("Remove", key=f"remove_{comp}"):
+                    remove_competitor(comp)
     
-    # Analysis Options
-    st.subheader("Analysis Options")
-    col1, col2 = st.columns(2)
-    with col1:
-        store_bigquery = st.checkbox("Store results in BigQuery", value=True)
-    with col2:
-        show_report = st.checkbox("Show analysis report", value=True)
-    
-    # Run Analysis Button
-    if st.button("Run Market Analysis", type="primary", disabled=not (prospect_domain and st.session_state.competitor_domains)):
-        if not prospect_domain:
-            st.error("Please enter a prospect domain.")
-        elif not st.session_state.competitor_domains:
-            st.error("Please add at least one competitor domain.")
-        else:
+    # Run analysis button
+    if st.button("Run Analysis", disabled=not (prospect_domain and st.session_state.competitors)):
+        if not os.getenv('SE_RANKING_API_KEY'):
+            st.error("Please set your SE Ranking API key in the Settings page first.")
+            return
+        
+        try:
             progress_text = st.empty()
             progress_bar = st.progress(0)
-            try:
-                # Run the MOE analysis with progress updates
-                total_steps = len(st.session_state.competitor_domains) + 3  # +3 for prospect domain, merging, and final analysis
-                current_step = 0
-                
-                # Fetch prospect domain data
-                progress_text.text(f"Fetching data for prospect domain: {prospect_domain}")
-                results = analyze_market_opportunity(
-                    prospect_domain,
-                    st.session_state.competitor_domains,
-                    progress_callback=lambda msg: progress_text.text(msg)
-                )
-                current_step += 1
-                progress_bar.progress(current_step / total_steps)
-                
-                # Store results in session state
-                st.session_state.analysis_results = results
-                
-                if store_bigquery:
-                    progress_text.text("Storing results in BigQuery...")
-                    # TODO: Implement BigQuery storage
-                    st.info("BigQuery storage will be implemented soon")
-                
-                progress_text.text("Analysis completed successfully!")
-                progress_bar.progress(1.0)
-                
-                if show_report:
-                    st.session_state.current_page = 'results'
-                    st.rerun()
-                
-            except ValueError as ve:
-                st.error(f"Configuration error: {str(ve)}")
-            except requests.exceptions.RequestException as re:
-                st.error(f"API error: Failed to fetch data from SE Ranking. Please check your API key and try again. Error: {str(re)}")
-            except Exception as e:
-                st.error(f"An unexpected error occurred: {str(e)}")
-            finally:
-                progress_bar.empty()
-                progress_text.empty()
+            
+            def update_progress(progress, message):
+                progress_bar.progress(progress)
+                progress_text.text(message)
+            
+            # Run the analysis
+            results = analyze_market_opportunity(
+                prospect_domain,
+                st.session_state.competitors,
+                progress_callback=update_progress
+            )
+            
+            # Store results in session state
+            st.session_state.analysis_results = results
+            
+            # Navigate to results page
+            st.session_state.current_page = 'results'
+            st.experimental_rerun()
+            
+        except Exception as e:
+            st.error(f"An unexpected error occurred: {str(e)}")
+        finally:
+            progress_bar.empty()
+            progress_text.empty()
+
+def sidebar():
+    """Render the sidebar"""
+    with st.sidebar:
+        st.title("🔍 MOE Navigation")
+        st.markdown("---")
+        
+        if st.button("🏠 Home"):
+            st.session_state.current_page = 'home'
+        if st.button("🎯 Analysis"):
+            st.session_state.current_page = 'analysis'
+        if st.button("📊 Results", disabled=st.session_state.analysis_results is None):
+            st.session_state.current_page = 'results'
+        if st.button("⚙️ Settings"):
+            st.session_state.current_page = 'settings'
+        
+        st.markdown("---")
+        st.markdown("### About")
+        st.markdown("Market Opportunity Engine v1.0")
 
 @rate_limit(calls_per_second=1)
 def verify_api_key(api_key):

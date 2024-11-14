@@ -114,7 +114,7 @@ def calculate_opportunity_score(row: pd.Series) -> float:
             difficulty_score * difficulty_weight +
             cpc_score * cpc_weight)
 
-def analyze_market_opportunity(prospect_domain: str, competitor_domains: List[str]) -> Dict:
+def analyze_market_opportunity(prospect_domain: str, competitor_domains: List[str], progress_callback=None) -> Dict:
     """
     Analyze market opportunity by comparing prospect domain with competitors
     """
@@ -122,17 +122,29 @@ def analyze_market_opportunity(prospect_domain: str, competitor_domains: List[st
     prospect_data = fetch_domain_keywords(prospect_domain)
     prospect_data['domain'] = prospect_domain
     
+    if progress_callback:
+        progress_callback(0.1, "Fetching competitor data...")
+    
     all_data = [prospect_data]
     for domain in competitor_domains:
         comp_data = fetch_domain_keywords(domain)
         comp_data['domain'] = domain
         all_data.append(comp_data)
     
+    if progress_callback:
+        progress_callback(0.3, "Combining data...")
+    
     # Combine all data
     combined_df = pd.concat(all_data, ignore_index=True)
     
+    if progress_callback:
+        progress_callback(0.4, "Calculating opportunity scores...")
+    
     # Calculate opportunity scores
     combined_df['opportunity_score'] = combined_df.apply(calculate_opportunity_score, axis=1)
+    
+    if progress_callback:
+        progress_callback(0.6, "Generating analysis results...")
     
     # Generate analysis results
     results = {
@@ -150,6 +162,9 @@ def analyze_market_opportunity(prospect_domain: str, competitor_domains: List[st
         'competitive_gaps': {}
     }
     
+    if progress_callback:
+        progress_callback(0.7, "Calculating domain-specific metrics...")
+    
     # Calculate domain-specific metrics
     for domain in [prospect_domain] + competitor_domains:
         domain_data = combined_df[combined_df['domain'] == domain]
@@ -159,6 +174,9 @@ def analyze_market_opportunity(prospect_domain: str, competitor_domains: List[st
             'total_traffic': domain_data['traffic'].sum(),
             'avg_difficulty': domain_data['difficulty'].mean()
         }
+    
+    if progress_callback:
+        progress_callback(0.8, "Calculating keyword overlap...")
     
     # Calculate keyword overlap
     all_keywords = set(combined_df['keyword'].unique())
@@ -172,6 +190,9 @@ def analyze_market_opportunity(prospect_domain: str, competitor_domains: List[st
             'overlap_percentage': len(overlap) / len(prospect_keywords) * 100
         }
     
+    if progress_callback:
+        progress_callback(0.9, "Finding competitive gaps...")
+    
     # Find competitive gaps (keywords competitors rank for but prospect doesn't)
     competitor_keywords = set()
     for domain in competitor_domains:
@@ -184,5 +205,8 @@ def analyze_market_opportunity(prospect_domain: str, competitor_domains: List[st
             (combined_df['domain'].isin(competitor_domains))
         ]
         results['competitive_gaps'] = gap_data.nlargest(10, 'opportunity_score').to_dict('records')
+    
+    if progress_callback:
+        progress_callback(1.0, "Analysis complete!")
     
     return results
