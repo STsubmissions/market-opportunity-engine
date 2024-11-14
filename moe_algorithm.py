@@ -14,26 +14,17 @@ load_dotenv()
 research_limiter = RateLimiter(calls_per_second=1)  # 1 request per second for research API
 
 @rate_limit(calls_per_second=1)
-def make_api_request(url, headers, params=None, json=None, method="GET"):
-    """Make a rate-limited API request"""
-    try:
-        if method == "GET":
-            response = requests.get(url, headers=headers, params=params, timeout=10)
-        elif method == "POST":
-            response = requests.post(url, headers=headers, json=json, timeout=10)
-        elif method == "DELETE":
-            response = requests.delete(url, headers=headers, timeout=10)
-        
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        if response.status_code == 429:
-            # Handle rate limit exceeded
-            retry_after = int(response.headers.get('Retry-After', 600))  # Default to 10 minutes
-            print(f"Rate limit exceeded. Waiting {retry_after} seconds...")
-            time.sleep(retry_after)
-            return make_api_request(url, headers, params, json, method)  # Retry the request
-        raise e
+def make_api_request(url, headers=None, params=None, retries=3, delay=1):
+    """Make a rate-limited API request with retries"""
+    for attempt in range(retries):
+        try:
+            response = requests.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            if attempt == retries - 1:  # Last attempt
+                raise Exception(f"API request failed after {retries} attempts: {str(e)}")
+            time.sleep(delay * (attempt + 1))  # Exponential backoff
 
 def fetch_domain_keywords(domain: str) -> pd.DataFrame:
     """
@@ -44,50 +35,55 @@ def fetch_domain_keywords(domain: str) -> pd.DataFrame:
         raise ValueError("SE Ranking API key not found in environment variables")
     
     # SE Ranking API endpoints
-    base_url = "https://api.seranking.com/research"
+    base_url = "https://api4.seranking.com/research"
     
-    # First, create a project for the domain
-    project_url = f"{base_url}/projects"
+    # Headers for all requests
     headers = {
         "Authorization": api_key,
         "Content-Type": "application/json"
     }
     
-    project_data = {
-        "site": domain,
-        "title": f"MOE Analysis - {domain}",
-        "searchEngine": "google.com"
-    }
-    
     try:
-        # Create project
-        project_response = make_api_request(project_url, headers, method="POST", json=project_data)
-        project_id = project_response['id']
-        
-        # Wait for initial data collection
-        time.sleep(5)
-        
-        # Fetch keyword rankings
-        rankings_url = f"{base_url}/keywords/{project_id}/rankings"
-        rankings_response = make_api_request(rankings_url, headers)
-        rankings_data = rankings_response
+        # Get domain keywords with pagination
+        keywords = []
+        page = 1
+        while True:
+            keyword_params = {
+                "domain": domain,
+                "type": "organic",
+                "limit": 1000,
+                "page": page,
+                "cols": "keyword,position,prev_pos,volume,cpc,competition,url,traffic,price"
+            }
+            
+            keyword_response = make_api_request(
+                f"{base_url}/us/keywords/",
+                headers=headers,
+                params=keyword_params
+            )
+            
+            if not keyword_response or not keyword_response.get('rows'):
+                break
+                
+            keywords.extend(keyword_response['rows'])
+            page += 1
+            
+            # Limit to first 10 pages for now to avoid long processing times
+            if page > 10:
+                break
         
         # Process the rankings data into a DataFrame
         keywords_data = []
-        for keyword in rankings_data.get('keywords', []):
+        for keyword in keywords:
             keyword_info = {
                 'keyword': keyword.get('keyword', ''),
-                'search_volume': keyword.get('searchVolume', 0),
+                'search_volume': keyword.get('volume', 0),
                 'position': keyword.get('position', 0),
                 'traffic': keyword.get('traffic', 0),
-                'difficulty': keyword.get('difficulty', 0),
+                'difficulty': keyword.get('competition', 0),
                 'cpc': keyword.get('cpc', 0.0)
             }
             keywords_data.append(keyword_info)
-        
-        # Clean up - delete the project
-        delete_url = f"{base_url}/projects/{project_id}"
-        make_api_request(delete_url, headers, method="DELETE")
         
         return pd.DataFrame(keywords_data)
         
