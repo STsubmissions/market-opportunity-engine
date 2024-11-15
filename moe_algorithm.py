@@ -73,10 +73,30 @@ def fetch_domain_keywords(domain: str) -> pd.DataFrame:
                 params=keyword_params
             )
             
-            if not keyword_response or not keyword_response.get('rows'):
+            # Check if we got valid data
+            if not isinstance(keyword_response, dict) or 'rows' not in keyword_response:
+                print(f"Unexpected API response format: {keyword_response}")
                 break
                 
-            keywords.extend(keyword_response['rows'])
+            rows = keyword_response.get('rows', [])
+            if not rows:
+                break
+                
+            # Process each keyword row
+            for row in rows:
+                if isinstance(row, dict):
+                    keywords.append({
+                        'keyword': row.get('keyword', ''),
+                        'position': row.get('position', 0),
+                        'prev_pos': row.get('prev_pos', 0),
+                        'volume': row.get('volume', 0),
+                        'cpc': row.get('cpc', 0.0),
+                        'competition': row.get('competition', 0),
+                        'url': row.get('url', ''),
+                        'traffic': row.get('traffic', 0),
+                        'price': row.get('price', 0.0)
+                    })
+            
             page += 1
             
             # Limit to first 10 pages for now to avoid long processing times
