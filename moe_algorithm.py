@@ -7,6 +7,7 @@ from datetime import datetime
 import time
 from dotenv import load_dotenv
 from utils.rate_limiter import rate_limit, RateLimiter
+import json
 
 load_dotenv()
 
@@ -73,29 +74,51 @@ def fetch_domain_keywords(domain: str) -> pd.DataFrame:
                 params=keyword_params
             )
             
+            print(f"\nKeyword Response Page {page}:", json.dumps(keyword_response, indent=2))
+            
             # Check if we got valid data
-            if not isinstance(keyword_response, dict) or 'rows' not in keyword_response:
-                print(f"Unexpected API response format: {keyword_response}")
+            if not isinstance(keyword_response, dict):
+                print(f"Error: Expected dictionary response, got {type(keyword_response)}")
                 break
                 
-            rows = keyword_response.get('rows', [])
+            # Get the rows data, which might be under a different key
+            rows = None
+            if 'rows' in keyword_response:
+                rows = keyword_response['rows']
+            elif 'data' in keyword_response:
+                rows = keyword_response['data']
+            elif 'keywords' in keyword_response:
+                rows = keyword_response['keywords']
+            else:
+                print("Available keys in response:", list(keyword_response.keys()))
+                break
+            
             if not rows:
                 break
                 
             # Process each keyword row
             for row in rows:
-                if isinstance(row, dict):
-                    keywords.append({
-                        'keyword': row.get('keyword', ''),
-                        'position': row.get('position', 0),
-                        'prev_pos': row.get('prev_pos', 0),
-                        'volume': row.get('volume', 0),
-                        'cpc': row.get('cpc', 0.0),
-                        'competition': row.get('competition', 0),
-                        'url': row.get('url', ''),
-                        'traffic': row.get('traffic', 0),
-                        'price': row.get('price', 0.0)
-                    })
+                try:
+                    # Try to find the correct keys by printing the first row
+                    if len(keywords) == 0:
+                        print("\nSample Row Data:", json.dumps(row, indent=2))
+                    
+                    # Extract data with multiple possible key names
+                    keyword_data = {
+                        'keyword': row.get('keyword', row.get('term', row.get('query', ''))),
+                        'position': row.get('position', row.get('rank', row.get('serp_position', 0))),
+                        'volume': row.get('volume', row.get('search_volume', row.get('monthly_searches', 0))),
+                        'cpc': row.get('cpc', row.get('cost_per_click', row.get('average_cpc', 0.0))),
+                        'competition': row.get('competition', row.get('difficulty', row.get('keyword_difficulty', 0))),
+                        'url': row.get('url', row.get('landing_page', row.get('page_url', ''))),
+                        'traffic': row.get('traffic', row.get('visits', row.get('estimated_visits', 0))),
+                        'price': row.get('price', row.get('cost', row.get('estimated_cost', 0.0)))
+                    }
+                    keywords.append(keyword_data)
+                except Exception as e:
+                    print(f"Error processing row: {e}")
+                    print("Row data:", row)
+                    continue
             
             page += 1
             
