@@ -1,12 +1,20 @@
 [build]
-  command = "pip install -r requirements.txt && streamlit run app.py"
+  command = """
+    pip install -r requirements.txt &&
+    mkdir -p public &&
+    cp -r * public/ &&
+    touch public/runtime.txt &&
+    echo "python-3.8.12" > public/runtime.txt &&
+    touch public/Procfile &&
+    echo "web: streamlit run app.py --server.port $PORT" > public/Procfile
+  """
   publish = "public"
-  functions = "netlify/functions"
 
 [build.environment]
   PYTHON_VERSION = "3.8"
 
 [[redirects]]
   from = "/*"
-  to = "/index.html"
+  to = "/.netlify/functions/streamlit"
   status = 200
+  force = true

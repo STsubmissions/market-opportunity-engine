@@ -1,0 +1,9 @@
+{
+  "name": "streamlit-function",
+  "version": "1.0.0",
+  "description": "Netlify function to run Streamlit",
+  "main": "streamlit.js",
+  "dependencies": {
+    "child_process": "^1.0.2"
+  }
+}
